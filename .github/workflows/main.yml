@@ -1,35 +1,66 @@
-name: CI devops 2025
+name: CI DevOps 2025
 
 on:
-  #to begin you want to launch this job in main and develop
   push:
     branches:
       - master
       - develop
   pull_request:
+    types: [opened, synchronize, reopened]
 
-#liste les taches du pipeline
 jobs:
-  test-backend:
-    runs-on: ubuntu-24.04
+  test-and-analyze-backend:
+    name: Build, Test and SonarCloud Analysis
+    runs-on: ubuntu-latest
     steps:
-    #checkout your github code using actions/checkout@v4
+      # Checkout code
       - uses: actions/checkout@v4
-      #do the same with another action (actions/setup-java@v4) that enable to setup jdk 21
+        with:
+          fetch-depth: 0  # nécessaire pour SonarCloud
+
+      # Setup JDK 21 (ou 17 si tu veux rester cohérent avec SonarQube)
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
-      #finally build your app with the latest command
-      - name: Build and test with Maven
+
+      # Cache Maven dependencies
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      # Cache SonarCloud packages
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      # Build and test backend with Maven
+      - name: Build and Test with Maven
         run: mvn clean verify
         working-directory: ./backend/simpleapi
 
-  build-and-push-docker-image:
-    needs: test-backend
-    runs-on: ubuntu-24.04
+      # SonarCloud analysis
+      - name: Run SonarCloud Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+          -Dsonar.projectKey=manon223_TP1_devops \
+          -Dsonar.organization=manon223 \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+          --file ./backend/simpleapi/pom.xml
 
+  build-and-push-docker-image:
+    name: Build and Push Docker Images
+    needs: test-and-analyze-backend
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,23 +68,23 @@ jobs:
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Build image and push backend
+      - name: Build and Push Backend Docker Image
         uses: docker/build-push-action@v6
         with:
           context: ./backend/simpleapi
-          file: ./backend/simpleapi/Dockerfile      # facultatif si Dockerfile s'appelle Dockerfile
+          file: ./backend/simpleapi/Dockerfile
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-backend:latest
           push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
-      - name: Build image and push database
+      - name: Build and Push Database Docker Image
         uses: docker/build-push-action@v6
         with:
-          context: ./bdd           # ou ./dbb si c'est ton dossier
+          context: ./bdd
           file: ./bdd/Dockerfile
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:latest
           push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
-      - name: Build image and push httpd
+      - name: Build and Push HTTPD Docker Image
         uses: docker/build-push-action@v6
         with:
           context: ./web
