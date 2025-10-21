@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: ./backend/simpleapi
+      dockerfile: Dockerfile
+    container_name: simple-api
+    networks:
+      - app-network
+    depends_on:
+      - database
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://database:5432/db
+      - SPRING_DATASOURCE_USERNAME=usr
+      - SPRING_DATASOURCE_PASSWORD=pwd
+    restart: unless-stopped
+
+  database:
+    build:
+      context: ./bdd
+      dockerfile: Dockerfile
+    container_name: database
+    networks:
+      - app-network
+    volumes:
+      - ./bdd/init/datadir:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  httpd:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: web
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db-data:
