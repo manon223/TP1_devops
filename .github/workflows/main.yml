@@ -14,19 +14,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout code
+      # Checkout du code
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # nécessaire pour SonarCloud
 
-      # Setup JDK 17 (recommandé pour SonarCloud)
+      # Configuration de Java 21 avec Temurin
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: 21
 
-      # Cache Maven dependencies
+      # Cache des dépendances Maven
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
@@ -34,7 +34,7 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
-      # Cache SonarCloud dependencies
+      # Cache des fichiers SonarCloud
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
@@ -42,12 +42,12 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      # Build & test backend
+      # Compilation et tests Maven
       - name: Build and Test with Maven
         working-directory: ./backend/simpleapi
         run: mvn -B clean verify
 
-      # SonarCloud analysis (run Sonar only, not verify again)
+      # Analyse SonarCloud
       - name: Run SonarCloud Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -64,7 +64,6 @@ jobs:
     name: Build and Push Docker Images
     needs: test-and-analyze-backend
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,7 +71,6 @@ jobs:
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      # Backend Docker image
       - name: Build and Push Backend Docker Image
         uses: docker/build-push-action@v6
         with:
@@ -81,7 +79,6 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-backend:latest
           push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
-      # Database Docker image
       - name: Build and Push Database Docker Image
         uses: docker/build-push-action@v6
         with:
@@ -90,7 +87,6 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:latest
           push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
-      # HTTPD Docker image
       - name: Build and Push HTTPD Docker Image
         uses: docker/build-push-action@v6
         with:
