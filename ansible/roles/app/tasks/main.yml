@@ -1,0 +1,13 @@
+---
+# tasks file for roles/app
+- name: Run app container
+  docker_container:
+    name: simple-api
+    image: "{{ backend_image | default('manon223/tp-devops-backend:latest') }}"
+    env:
+      DATABASE_URL: jdbc:postgres://usr:pwd@database:5432/db
+    networks:
+      - name: my_app_network
+    ports:
+      - "8080:8080"
+    restart_policy: always
