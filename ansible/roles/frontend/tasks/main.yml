@@ -1,0 +1,12 @@
+---
+# tasks file for roles/frontend
+- name: Run Frontend Container
+  docker_container:
+    name: frontend
+    image: manon223/tp-devops-frontend:latest
+    state: started
+    restart_policy: always
+    networks:
+      - name: my_app_network
+    pull: true
+    ansible_python_interpreter: "{{ docker_python_interpreter }}"
