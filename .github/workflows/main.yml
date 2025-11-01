@@ -1,4 +1,4 @@
-name: CI/CD DevOps 2025
+name: CI DevOps 2025
 
 on:
   push:
@@ -14,19 +14,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Checkout du code
+      # Checkout du code
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # nécessaire pour SonarCloud
 
-      # ✅ Configuration de Java 21
+      # Configuration de Java 21 avec Temurin
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: 21
 
-      # ✅ Cache Maven
+      # Cache des dépendances Maven
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
@@ -34,7 +34,7 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
-      # ✅ Cache SonarCloud
+      # Cache des fichiers SonarCloud
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
@@ -42,12 +42,12 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      # ✅ Build et test du backend
+      # Compilation et tests Maven
       - name: Build and Test with Maven
         working-directory: ./backend/simpleapi
         run: mvn -B clean verify
 
-      # ✅ Analyse SonarCloud
+      # Analyse SonarCloud
       - name: Run SonarCloud Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -61,80 +61,36 @@ jobs:
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
   build-and-push-docker-image:
-    name: Build, Scan and Push Docker Images
+    name: Build and Push Docker Images
     needs: test-and-analyze-backend
     runs-on: ubuntu-latest
-    outputs:
-      backend_tag: ${{ steps.meta.outputs.image_tag }}
-
     steps:
-      # ✅ Checkout du code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ✅ Générer un tag basé sur le SHA du commit
-      - name: Get short SHA tag
-        id: meta
-        run: echo "image_tag=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      # ✅ Connexion à DockerHub
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      # ✅ Build et push de l’image backend avec tag unique et latest
       - name: Build and Push Backend Docker Image
         uses: docker/build-push-action@v6
         with:
           context: ./backend/simpleapi
           file: ./backend/simpleapi/Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-backend:${{ steps.meta.outputs.image_tag }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-backend:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-backend:latest
+          push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
-      # ✅ (Optionnel mais recommandé) Scan de sécurité avec Trivy
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@v2
-        with:
-          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-backend:${{ steps.meta.outputs.image_tag }}
-          exit-code: '0'   # ne bloque pas le pipeline
-          severity: 'HIGH,CRITICAL'
-
-      # ✅ Build et push de la base de données
       - name: Build and Push Database Docker Image
         uses: docker/build-push-action@v6
         with:
           context: ./bdd
           file: ./bdd/Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:latest
+          push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
-      # ✅ Build et push du proxy HTTPD
       - name: Build and Push HTTPD Docker Image
         uses: docker/build-push-action@v6
         with:
           context: ./web
           file: ./web/Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-httpd:latest
-
-  deploy:
-    name: Deploy to Remote Server
-    needs: build-and-push-docker-image
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
-
-    steps:
-      # ✅ Connexion SSH et déploiement via Ansible
-      - name: Deploy via SSH to server
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/my-project || exit 1
-            ansible-playbook -i ansible/inventories/setup.yml ansible/playbook_deploy.yml -b \
-              -e "backend_image=${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-backend:${{ needs.build-and-push-docker-image.outputs.backend_tag }}"
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-httpd:latest
+          push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
