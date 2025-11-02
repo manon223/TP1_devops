@@ -1,3 +1,16 @@
+---
+- hosts: localhost
+  gather_facts: false
+  connection: local
+  become: false
+
+  tasks:
+    - name: Create temporary SSH key file from vault
+      copy:
+        content: "{{ vault_ansible_ssh_private_key }}"
+        dest: /tmp/ssh_key
+        mode: '0600'
+
 - hosts: all
   become: true
   gather_facts: true

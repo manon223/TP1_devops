@@ -1,13 +1,14 @@
 ---
-# tasks file for roles/database
-- name: Run database container
+- name: Run Database Container
   docker_container:
     name: database
     image: manon223/tp-devops-database:latest
-    env:
-      POSTGRES_USER: usr
-      POSTGRES_PASSWORD: pwd
-      POSTGRES_DB: db
+    state: started
+    restart_policy: always
     networks:
       - name: my_app_network
-    restart_policy: always
+    env:
+      POSTGRES_DB: "{{ vault_database_name }}"
+      POSTGRES_USER: "{{ vault_database_user }}"
+      POSTGRES_PASSWORD: "{{ vault_database_password }}"
+    pull: true

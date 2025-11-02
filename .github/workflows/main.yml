@@ -125,16 +125,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install ansible
 
-      - name: Setup SSH key
+      - name: Create Vault password file
+        run: |
+          echo "${{ secrets.VAULT_PASSWORD }}" > /tmp/vault_password.txt
+          chmod 600 /tmp/vault_password.txt
+
+      - name: Add host to known_hosts
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H manon.bacque.takima.cloud >> ~/.ssh/known_hosts
 
-      - name: Run Ansible Playbook
+      - name: Run Ansible Playbook with Vault
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'False'
         run: |
           cd ansible
-          ansible-playbook -i inventories/setup.yml playbook_deploy.yml
+          ansible-playbook -i inventories/setup.yml playbook_deploy.yml \
+            --vault-password-file /tmp/vault_password.txt
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f /tmp/vault_password.txt
+          rm -f /tmp/ssh_key
